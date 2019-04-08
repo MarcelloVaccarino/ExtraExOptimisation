@@ -1,0 +1,11 @@
+reset;
+
+model service.mod;
+data service.dat;
+
+option solver  'cplex';
+
+solve;
+
+display x;
+display w;

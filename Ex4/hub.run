@@ -1,0 +1,11 @@
+reset;
+
+model hub.mod
+data hub.dat
+
+option solver cplex;
+solve; 
+
+display x;
+display y;
+

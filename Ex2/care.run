@@ -1,0 +1,9 @@
+reset;
+
+model care.mod;
+data care.dat;
+
+option solver  'cplex';
+
+solve;
+display w;
