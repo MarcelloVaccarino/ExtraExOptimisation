@@ -1,0 +1,38 @@
+reset;
+
+model LPRM.mod;
+model pricing.mod;
+data stock.dat;
+
+option solver 'cplex';
+
+problem LPRM:
+  #[TODO] vars and param
+  ;
+
+problem pricing:
+  #[TODO] vars and param
+  ;
+
+let k := 0;
+let J := 1..k+4;
+
+repeat {
+  problem LPRM;
+  solve LPRM;
+  
+  let y_star {i in I} := LPRMobj * b[i];
+
+  problem pricing;
+  solve pricing;
+  
+  if (augmented_cost < 0) then {
+    let k := k + 1;
+    let J := J union {k};
+    continue;
+  }
+  else { 
+    break;
+  }
+  
+} while (1);

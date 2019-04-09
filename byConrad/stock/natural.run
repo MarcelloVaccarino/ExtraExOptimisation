@@ -1,0 +1,7 @@
+reset;
+
+model natural.mod;
+data stock.dat;
+
+option solver 'cplex';
+solve;
