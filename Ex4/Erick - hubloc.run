@@ -1,0 +1,9 @@
+reset;
+
+model hubloc.mod;
+data hub.dat;
+
+option solver cplex;
+solve;
+
+display x;
