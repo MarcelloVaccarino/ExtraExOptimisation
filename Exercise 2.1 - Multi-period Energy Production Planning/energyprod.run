@@ -1,0 +1,10 @@
+reset;
+
+model energyprod.mod;
+data energyprod.dat;
+
+option solver cplex;
+solve;
+
+display x, y;
+display z;
