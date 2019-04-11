@@ -1,6 +1,6 @@
 reset;
 
-model hub.mod
+model CelloHub.mod
 data hub.dat
 
 option solver cplex;
