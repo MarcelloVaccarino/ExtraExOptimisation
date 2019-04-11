@@ -3,32 +3,34 @@ reset;
 model LPRM.mod;
 model pricing.mod;
 data stock.dat;
+data initialisation.dat
 
 option solver 'cplex';
 
 problem LPRM:
-  #[TODO] vars and param
-  ;
+	x, master_rolls, demand;
 
 problem pricing:
-  #[TODO] vars and param
-  ;
+ 	alpha, reduced_cost, knapsack;
 
-let k := 0;
-let J := 1..k+4;
+let J := 1 ..k;
 
 repeat {
-  problem LPRM;
-  solve LPRM;
-  
-  let y_star {i in I} := LPRMobj * b[i];
+
+	solve LPRM;
+
+	for {i in I} {
+   		let y_star[i]:=demand[i].dual; 
+   	}
 
   problem pricing;
   solve pricing;
   
-  if (augmented_cost < 0) then {
+  if (reduced_cost < 0) then {
     let k := k + 1;
-    let J := J union {k};
+    for {i in I} {
+   		let a[i, k]:=alpha[i]; 
+   	}
     continue;
   }
   else { 
@@ -36,3 +38,6 @@ repeat {
   }
   
 } while (1);
+
+display master_rolls;
+display x;

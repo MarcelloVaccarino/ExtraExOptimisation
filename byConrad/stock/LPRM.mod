@@ -4,9 +4,10 @@ param W;			# width of the big roll
 
 param m;			# num of different small rolls
 set I := 1..m;
-param w[I];			# width
-param b[i];			# demand
+param w{I};			# width
+param b{I};			# demand
 
+param k;
 set J;				# index set of patterns	
 param  a {I, J};	
 
@@ -19,4 +20,4 @@ minimize master_rolls:
 	sum {j in J} x[j];
 
 s.t. demand {i in I}:
-	sum {j in J} a[i, j] * x[j] >= b[i]}
+	sum {j in J} a[i, j] * x[j] >= b[i];

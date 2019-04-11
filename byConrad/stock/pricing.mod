@@ -1,11 +1,6 @@
 # SETS & PARAMS
 
-param W;			# width of the big roll
-
-param m;			# num of different small rolls
-set I := 1..m;
-param w{I};		# width
-param b{I};		# demand
+param y_star{I};
 
 # VARS
 var alpha {I}, integer, >= 0;
@@ -15,5 +10,5 @@ var alpha {I}, integer, >= 0;
 minimize reduced_cost:
 	1 - sum {i in I} y_star[i] * alpha[i];
 
-s.t. constraint:
+s.t. knapsack:
 	sum {i in I} w[i] * alpha[i] >= W;

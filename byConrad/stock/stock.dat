@@ -1,6 +1,6 @@
 data;
 
-param p := 100;
+#param p := 100;
 param W := 3.9;
 
 param m := 3;
