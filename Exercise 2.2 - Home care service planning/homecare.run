@@ -1,0 +1,12 @@
+reset;
+
+model homecare.mod;
+data homecare.dat;
+
+option solver cplex;
+option relax_integrality 0;
+solve;
+
+display time;
+display x;
+display y;
