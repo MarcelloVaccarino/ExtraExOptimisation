@@ -1,0 +1,198 @@
+reset;
+option solver cplex;
+option relax_integrality 0;
+
+# Load .mod and .dat files
+model master-i.mod;
+model pricing-i.mod;
+data airline.dat;
+
+# The Master Problem takes as parameter a set of already feasibile pairings
+# and it minimizes the overall number of pairings needed to cover all flights.
+# That is why in its constraints there is no check about the feasibilty of the
+# pairings he can choose: it is assumed that they are already feasible and the 
+# unique check performed is on the coverage of the Pairings chosen (they must
+# cover all flights).
+problem master: # variables, objective function, constraints 
+x, pairings, partitioning;
+
+# The Pricing Subproblem is "in charge of" finding new Pairings that improve
+# the current solution: the new Pairing is chosen maximizing its length (or 
+# equally: minimizing its reduced cost) and enforcing the definition of
+# pairing on the current sequence of flights. 
+# That is why the constraint about the Pairing definition are contained in
+# the Pricing Subproblem.
+# In this formulation, the Pricing Subproblem is divided in smaller problems,
+# which find the longest pairing within a given Source and a given Target,
+# already feasible (and contained in the parameter g).
+problem pricing: # variables, objective function, constraints
+alpha, z, LongestPath, balanceSource, balanceTarget, balance, activation;
+
+#----------------------------------------------------------------
+# Initialize a starting feasible solution for the Master Problem|
+#----------------------------------------------------------------
+	# Initial number of Pairings
+	let n_j:=n_i/2;
+	for {i in I}{
+	  for {j in J}{
+	   let a[i,j]:=0;
+	  }
+	 }
+ 
+	param count;
+	let count:=1;
+
+	# Fill the initial Matrix A[i,j]: it's feasible because
+	# the dataset was prepared in this way, with couples of 
+	# adjacent flights leg that are already feasible.
+	#
+	# A = [	1,	0,	0,	..,
+	#		1,	0,	0,	..,
+	#		0,	1,	0,	..,
+	#		0,	1,	0,	..,
+	#		0,	0,	1,	..,
+	#		0,	0,	1,	..,
+	#		..,	..,	..,	.., ]
+	
+	for {i in I}{
+	  if (count==n_j+1) then break;
+	  let a[i+(count-1),count]:=1;
+	  let a[i+1+(count-1),count]:=1;
+	  let count:=count+1;
+	 }
+	 
+#----------------------------------------------------------------------------------------------
+# Create the graph of feasible paths:
+#	create an arc (ii,jj) for each couple of legs ii,jj if destination of i is the origin of i1 
+#	and the time window constraints are satisfied
+#
+# G in R^(I cross I) = Incidence matrix of the graph
+# 	g(i1,i2) =	| 1 if exists arc (i1,i2)
+#				| 0 otherwise
+#
+# This is the parameter used by the Pricing Subproblem to identify feasible pairings.
+#---------------------------------------------------------------------------------------------
+for {ii in I} {
+	for {jj in I} {
+		if (d[ii] == o[jj] #Destination of flight ii must coincide with origin of flight jj
+			and 
+			s[jj] >= s[ii] + l[ii] + 1 # Starting time of flight jj must allow for flight ii plus 1 hour of resting
+			) 
+		then let g[ii,jj] := 1;
+	}
+}
+# display g;
+
+#-----------------------
+# Main Loop            |
+#-----------------------
+
+# Boolean parameter to save the fact that a new column has been found
+param found,binary,default 0;
+
+# Structure to keep track of all the columns (pairings) 
+param n_columns;
+let n_columns := 0; #Init
+param generated_pairings{I, 1..n_columns};
+
+# Parameter to store the Reduced Cost found with the Pricing Subproblem in order to decide whether a new column is found or not
+param violation;
+
+repeat{
+	
+	#Solve the Master Problem in order to find a Feasible Solution starting for a set of Feasible Pairings A[i,j]
+	solve master;
+  
+	# Suppose the name of constraints in the master is "partitioning".
+	# Extract the Dual Solution from the Primal Problem in order to use them in the Pricing Subproblem:
+	# 	- Coefficients of the Objective Function of the Pricing Subproblem to the Shadow Prices of the Master Problem
+	for {i in I} {let ystar[i] := partitioning[i].dual;} 
+   	
+   	# Initialize the Boolean flag to false
+    let found:=0; 
+    
+    # Iterate for each possible couple source-target, which are stored in the g[ii,jj] parameters
+    
+    # Select an Origin with at least 1 outgoing arc in g[ii,jj] (if it doesn't, there is no feasible flight from that origin)
+	for {i in I: sum{i1 in I} g[i,i1] > 0 } { 
+    	
+    	# If a column has been already found, skip the rest of the Loop 
+    	# and jump at the end of the While Loop: the new column has already been 
+    	# added to the Master Problem and it needs to be run again to 
+    	# improve the solution and update the reduced costs;
+    	if (found==1) then break;
+      	
+      	# Initialize the Source found for the Pricing Subproblem
+      	let source:=i;
+      	
+      	# Select a Target with destination in the origin (so that it actually closes the trip, requirements to be part of 
+      	# a feasible pairings) with at least 1 ingoing arc (if it doesn't, there is not feasible flight that goes there)
+      	for {m in I: o[i]==d[m] and sum{i1 in I} g[i1,m] > 0} { 
+      		
+        	let found:=0;
+        	
+        	#Initialize the Target found for the Pricing Subproblem
+        	let target:=m;
+        	
+        	# Solve the Pricing Subproblem for the couple Source-Target found in this iteration
+        	solve pricing;
+        
+        	# Suppose the name of the Objective Function of the Pricing Subproblem LongestPath
+        	let violation:=1-LongestPath;
+        	
+        	# A column is found if the solution of the Pricing Subproblem is negative, since it represent the minimum reduced cost
+        	# possible associated to the solution found for the pair Source-Target. 
+        	# If the minimum reduced cost is above 0, no improving Non-Basic Variable is found and no improving columns are found.
+        	if (violation<0) then{ 
+          		# Add the new column to the Master Problem
+          		
+          		# Increase the number of Pairings in the A[i,j] Matrix:
+          		# in this iteration, n_j is the index of the current column found,
+          		# i.e. the one to be added now
+          		let n_j:=n_j+1;
+          		
+          		# Increase the number of columns to be tracked
+          		let n_columns:=n_columns+1;
+          		
+          		# For each Flight, set a[k, n_j] to the value of the solution found in the Pricing Subproblem.
+          		# Alpha is the vector of the new Pairing that needs to be added to A[i,j]:
+          		#	- Alpha[k] = 0: flight k is not part of the new Pairing
+          		#	- Alpha[k] = 1: flight k is part of the new Pairing
+          		for {k in I}{
+          			
+          			# Add new Pairing to A[i,j]: set the new column vector to the optimal Alpha vector of the Pricing
+            		let a[k,n_j]:=alpha[k]; 
+            		
+            		# Add new Pairing to the Parameter that contains them
+            		let generated_pairings[k,n_columns]:=alpha[k];
+          		}
+          		
+          		# Set the Boolean parameter to True, in order to stop the next iteration and solve the Master Problem again
+          		let found:=1;
+          		break;
+        	}
+       	}
+	}
+	
+# Cycle until new feasible columns can be found
+} while (found==1); 
+
+#-----------------------
+# display solution     |
+#-----------------------
+display pairings;
+
+param n_a;
+let n_a:=pairings;
+
+param selected_pairings{I,1..n_a}, default 0;
+param idx;
+let idx:=1;
+for {j in J:x[j]==1}{ # to keep track of the selected pairings in the optimal solution
+  for{i in I}{
+    let selected_pairings[i,idx]:=a[i,j];
+   }
+    let idx:=idx+1;
+ }
+display generated_pairings;
+display selected_pairings;
