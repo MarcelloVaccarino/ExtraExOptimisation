@@ -1,0 +1,106 @@
+reset;
+
+#Load .mod and .dat files
+model primal-i.mod;
+model separation-i.mod;
+data ga.dat;
+
+option solver cplex;
+
+# The Primal Problem is a Relaxated Binary Knapsack Problem, 
+# initialize with a given set of Capacity inequality and
+# the Assignment constraint. Each time is run, the current optimal
+# solution is used to generate a new Cover Inquality by the 
+# Separation Problem.
+# The set of Cover Inequality is initially empty and enlarged
+# each time a new Cover Inequality is found by this file Loop.
+problem primal:
+#list vars, objective function, constraints names
+x, cost, assignment, capacity, cover_inequality;
+
+# The Separation Problem is called upon the Family of Constraints
+# called Cover Inequalities (the Separation Problem per se is called
+# upon all possible families of constraints), specifically it is 
+# called once per Capacity constraint in order to find the correspondent
+# Cover Inequality to be added to the Primal Problem in order to
+# strengthen its formulation and obtaining a better optimal relaxated 
+# solution. The Cover Inequality found is the one that cuts out the 
+# current relaxated optimal solution of the Primal Problem.
+# Infact, the definition of Separation Problem is to determine
+# a cut that separates the current relaxated optimal solution from
+# the feasible region.
+problem separation:
+#list vars, objective function, constraints names
+z, violationObj, violatedCover;
+
+# Initialize the initial number of Cover inequality to zero
+let nc := 0;
+
+# Initialize parameter to manage the Loop
+param violation, default 1e300;
+param found, binary, default 0;
+
+repeat {
+	
+	# Solve the Primal Problem, finding the current relaxated
+	# optimal solution x* (LP).	
+	solve primal;
+	display cost;
+	
+	# Iterates over all knapsacks in J
+	for {jj in J} {
+		
+		# Set the current knapsack index for the Separation Problem
+		let j_bar := jj;
+		
+		# Set x* for the Separation Problem with the optimal solution
+		# related to the currently considered knapsack of the Primal Problem
+    	let {i in I} x_star[i] := x[i,j_bar];
+		
+		# Re-initialize the found boolean parameter
+    	let found := 0;
+    	
+    	# Solve the Separation problem for knapsack jj = j_bar
+    	solve separation;
+		
+		# Store the violation value of the Separation Problem:
+		# in this case the Objective function is already expressed
+		# as 1 - sum{i in I} (1 - x_star[i])*z[i], which means
+		# that the optimal value returned is already the quantity
+		# of the related Cover inequality by which the current 
+		# optimal solution is violated.
+    	let violation := violationObj;
+    	
+    	# We do not consider the Cover Inequalities that violate
+    	# the current relaxated optimal solution by a small margin
+    	# so to speed up the loop
+    	if (violation <= 0.1) then {
+     		continue;
+    	}
+    	else {
+      		#Add the new Cover cut to the constraints of the primal problem
+      		
+      		# Increase the nc parameter which defines the cardinality
+      		# of the Sets that contain the Cover Inequality
+      		let nc := nc + 1; 
+      		
+      		# Add to Set C[nc] the items i that are involved in the new
+      		# Cover inequality
+      		let C[nc] := setof{i in I: z[i] = 1} i; 
+      		
+      		# Add to J_bar[nc] the knapsack related to the new Cover Inequality
+      		let J_bar[nc] := j_bar;
+      		
+      		# Boolean flag to one to keep the loop going in order to solve again
+      		# the Primal Problem with the new Cover Inequality 
+      		let found := 1; 
+      		display C[nc], j_bar;
+      		break;
+    	}
+  	}
+# If no new Cover Inequality is found, the Loop stops.
+} while (found == 1);
+
+solve primal;
+display cost;
+display nc;
