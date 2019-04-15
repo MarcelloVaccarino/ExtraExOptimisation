@@ -1,0 +1,12 @@
+reset;
+
+model net.mod;
+data net.dat;
+
+option solver cplex;
+option relax_integrality 0;
+
+solve;
+
+display x;
+display y;
