@@ -1,0 +1,64 @@
+reset;
+option solver cplex;
+option relax_integrality 0;
+
+model master_roll.mod;
+model pricing_roll.mod;
+data roll.dat;
+
+# Import Master and Pricing Problems
+problem master:
+x, largerolls, demand;
+
+problem pricing:
+alpha, reduced_cost, largeroll;
+
+# The initial feasible set of Patterns is contained
+# in the .dat file, within the parameter a[i,j]
+# while the initial number of patterns is n_j
+
+param found, binary, default 0;
+
+param n_columns;
+let n_columns := 0;
+param generated_patterns{I, 1..n_columns};
+
+param violation;
+
+repeat{
+	let found := 0;
+	
+	solve master;
+	display x;
+	display largerolls;
+	
+	for{i in I} {let ystar[i] := demand[i].dual;}
+	display ystar;
+	
+	solve pricing;
+	display reduced_cost;
+	
+	let violation := 1 - reduced_cost;
+	
+	if (violation < 0) then {
+		
+		let n_j := n_j + 1;
+		
+		let n_columns := n_columns + 1;
+		
+		for {k in I} {
+			let a[k, n_j] := alpha[k];
+			let generated_patterns[k, n_columns] := alpha[k];
+		}
+		
+		display generated_patterns;
+		
+		let found := 1;
+	}
+} while (found == 1);
+
+#-----------------------
+# display solution     |
+#-----------------------
+display largerolls;
+
