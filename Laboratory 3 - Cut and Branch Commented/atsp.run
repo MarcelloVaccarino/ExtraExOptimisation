@@ -1,0 +1,57 @@
+reset;
+
+model atsp-primal.mod;
+model atsp-separation.mod;
+data atsp.dat;
+
+option solver cplex;
+option relax_integrality 0;
+
+problem primal:
+x, costs, degree_in, degree_out, cutset;
+
+problem separation:
+y, z, z_source, z_target, capacity, cut, c_source, c_target;
+
+
+let nc := 0;
+
+param found, binary, default 0;
+
+repeat {
+	
+	solve primal;
+	display x;
+	display costs;
+	
+	for{(i,j) in A} {
+		let x_star[i,j] := x[i,j];
+	}
+	
+	let source := 1;
+	
+	for{i in V: i <> source} {
+		
+		let found := 0;
+		
+		let target := i;
+		
+		solve separation;
+		display capacity;
+		
+		
+		if (capacity < 1) then {
+			let nc := nc + 1;
+			
+			let Sstar[nc] := setof{j in V: z[j] = 1 or j = source} j;
+			display Sstar[nc];
+			
+			let found := 1;
+			
+			break;
+		}
+	}
+} while (found == 1);	
+
+display costs;
+			
